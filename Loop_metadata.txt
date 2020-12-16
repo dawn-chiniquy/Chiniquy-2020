@@ -1,0 +1,8 @@
+SampleID	SampleType
+A2	Rhizo
+B2	Rhizo
+C2	Soil
+D2	Soil
+E2	Root
+F2	Root
+G2	Root

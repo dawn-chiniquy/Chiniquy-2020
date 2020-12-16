@@ -1,0 +1,696 @@
+---
+title: "Chiniquy et al 2020 Analysis Scripts "
+output: html_notebook
+---
+
+#####################
+#### iTagger Analyses
+#####################
+
+#### Raw data from 16S rRNA v4 amplicon datasets sequenced on the Illumina MiSeq platform
+#### with v3 chemistry were clustered using the iTagger pipeline (Tremblay et al2015) with default settings, 
+#### with the following exceptions: 1) samples with less than 500 reads were discarded, 2) a custom
+####  database comprised of dereplicated  Silva databases was used for taxonomic classification. 
+#### The resulting OTU table was processed with the bash script "cleanup_otu_table.sh" to remove chloroplast 
+#### and mitochondiral contaminants, and to reformat incomplete taxonomic assignments for use downstream use in 
+#### R. 
+
+
+```{r}
+#clears current global environment
+rm(list = ls())
+
+# Sets the main working directory containing your OTU table and mapping file.
+root_directory<-"./"
+setwd(root_directory)
+
+# Sources functions used in analysis 
+source("itag_diversity.R")
+library(plyr)
+
+# Sets the RNG seed for rarifaction commands
+set.seed(42)
+
+get_OTU_tables("itagger_OTU_table.txt",minreadspersample=20000,
+               rarifycount=20000,threshold_sample=2,threshold_readcount=5)
+# Gets the OTU tables used in the remainder of the analyses. 
+  # The first argument is the name of the otu table file.
+  # minreadspersample   = minimum number of reads that a sample must have to be 
+  #                       included in the analysis.
+  # rarifycount         = the read depth to which all samples will be randomly sampled
+  #                       in the rarefied tables.
+  # threshold_sample,   = OTUs without at least threshold_readcount number of reads in
+  # threshold_readcount   at least threshold_sample number of samples are excluded in 
+  #                       the measureable OTU tables.jgi
+
+
+get_mapping_file("./itagger_metadata.txt","SampleType:Month:GrowthCondition:Genotype")
+
+env$SampleType<-factor(env$Sample,levels=c("soil","rhizosphere","root"))
+env$Month<-factor(env$Month,levels=c("July","September"))
+
+raw_env<- env
+raw_env<- test_samplenames(OTU_table_full,raw_env)
+rm(env)
+
+raw_env$SampleType<-revalue(raw_env$SampleType,c("soil"="Soil","rhizosphere"="Rhizo","root"="Root"))
+raw_env$Month<-revalue(raw_env$Month,c("July"="7-week","September"="15-week"))
+
+subset_OTU_table("OTU_table_measureable_rare")
+make_Rank_readcounts_tables("measureable_rare")
+
+save.image(paste(root_directory,"measureable_rare_itagger_new.RData",sep=""))
+load("measureable_rare_itagger_new.RData")
+```
+
+Figure 1 Legend. 
+
+```{r}
+##### Fig1a
+Fig1a<-get_Shannon(measureable_rare_AllSamples_AllSamples_OTU_readcounts)
+Fig1a<-cbind(Fig1a,get_env(Fig1a))
+ggplot(data=Fig1a,aes(x = SampleType,y=ShanEnt,fill=SampleType))+
+      facet_grid(.~Month)+
+      geom_boxplot()+
+      scale_y_continuous(name="Shannon's Diversity",limits = c(0,7.5),)+
+      scale_fill_manual(values=c(brewer.pal(9,"YlOrBr")[c(9,7,5)]),name="Sample Type")+
+      geom_point(position=position_jitterdodge(dodge.width=0.9))+
+      scale_x_discrete(name="Sample Type")+
+      theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename = "./Figures/Fig1a.pdf",width = 4,height = 8)
+
+```
+
+```{r}
+### Fig 1a Anova
+env_current<-get_env(Fig1a)
+Fig1a_Rhizosphere<-Fig1a[env_current$SampleType %in% c("Rhizo"),]
+Fig1a_anova<-aov(ShanEnt~Month,data = Fig1a_Rhizosphere)
+summary(Fig1a_anova)
+
+```
+
+```{r message=FALSE}
+#### Fig 1b
+Fig1b<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+Fig1b<-Fig1b[,order(colSums(-Fig1b))]
+Fig1b<-cbind(Fig1b[,c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)],rowSums(Fig1b[,c(16:ncol(Fig1b))]),get_env(Fig1b))
+names(Fig1b)[16]<-"Other"
+colnames(Fig1b)<-c("Pseudomonas", "Chitinophaga", "Streptomyces", "Bradyrhizobium", "Burkholderiaceae Family", "Niastella", "Pedobacter", "Haliangium", "Rhizobacter", "Candidatus Udaeobacter", "Janthinobacterium", "Rhodanobacter", "Paraburkholderia", "Chloracidobacterium", "Gemmatimonas", "Other", "Genotype", "Plate", "Month", "SampleType", "GrowthCondition", "AllSamples")
+Fig1b_melt<-melt(Fig1b)
+ggplot(Fig1b_melt,aes(x=SampleType,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~Month)+
+  scale_fill_manual(values=rev(c(brewer.pal(11,"PiYG")[c(1)],rev(brewer.pal(11,"BrBG")[c(3,4,7,8,9,10)]),brewer.pal(11,"PuOr")[c(2:5,7:10)],"grey")),name="Genera")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16),axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="./Figures/Fig1b.pdf",height=8,width=10) 
+
+### Differential enrichment per SampleType and Month for Pseudomonas.
+
+R<-Fig1b_melt
+RP<-R[R$variable=="Pseudomonas",]
+transform(RP, SampleTypeMonth=paste(SampleType, Month))->RP_new
+RP_aov<-aov(value~SampleTypeMonth,RP_new)
+TukeyHSD(x=RP_aov, 'SampleTypeMonth', conf.level=0.95)
+
+```
+
+```{r message=FALSE}
+## Supp Figure 1
+SuppFig1<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+SuppFig1<-SuppFig1[,order(colSums(-SuppFig1))]
+SuppFig1<-cbind(SuppFig1[,c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)],rowSums(SuppFig1[,c(16:ncol(SuppFig1))]),get_env(SuppFig1))
+names(SuppFig1)[16]<-"Other"
+env_current<-get_env(SuppFig1)
+SuppFig1_Rhizosphere<-SuppFig1[env_current$SampleType %in% c("Rhizo"),]
+colnames(SuppFig1_Rhizosphere)<-c("Pseudomonas", "Chitinophaga", "Streptomyces", "Bradyrhizobium", "Burkholderiaceae Family", "Niastella", "Pedobacter", "Haliangium", "Rhizobacter", "Candidatus Udaeobacter", "Janthinobacterium", "Rhodanobacter", "Paraburkholderia", "Chloracidobacterium", "Gemmatimonas", "Other", "Genotype", "Plate", "Month", "SampleType", "GrowthCondition", "AllSamples")
+SuppFig1_Rhizosphere_melt<-melt(SuppFig1_Rhizosphere)
+ggplot(SuppFig1_Rhizosphere_melt,aes(x=Genotype,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~Month+GrowthCondition,scales="free_x")+
+  scale_fill_manual(values=rev(c(brewer.pal(11,"PiYG")[c(1)],rev(brewer.pal(11,"BrBG")[c(3,4,7,8,9,10)]),brewer.pal(11,"PuOr")[c(2:5,7:10)],"grey")),name="Genera")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16),axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="./Figures/SuppFig1.pdf",height=8,width=10) 
+
+### Differential enrichment per growth condition within 7-week rhizospheres for four genera.
+
+SuppFigS1<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+SuppFigS1<-SuppFigS1[,order(colSums(-SuppFigS1))]
+SuppFigS1<-cbind(SuppFigS1[,c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15)],rowSums(SuppFigS1[,c(16:ncol(SuppFigS1))]),get_env(SuppFigS1))
+names(SuppFigS1)[16]<-"Other"
+colnames(SuppFigS1)<-c("Pseudomonas", "Chitinophaga", "Streptomyces", "Bradyrhizobium", "Burkholderiaceae Family", "Niastella", "Pedobacter", "Haliangium", "Rhizobacter", "Candidatus Udaeobacter", "Janthinobacterium", "Rhodanobacter", "Paraburkholderia", "Chloracidobacterium", "Gemmatimonas", "Other", "Genotype", "Plate", "Month", "SampleType", "GrowthCondition", "AllSamples")
+SuppFigS1_melt<-melt(SuppFigS1)
+
+R<-SuppFigS1_melt[SuppFigS1_melt$SampleType=="Rhizo",]
+R7<-R[R$Month=="7-week",]
+R7P<-R7[R7$variable=="Pedobacter",]
+R7p_aov<-aov(value~GrowthCondition,R7P)
+summary(R7p_aov)
+ 
+R<-SuppFigS1_melt[SuppFigS1_melt$SampleType=="Rhizo",]
+R7<-R[R$Month=="7-week",]
+R7J<-R7[R7$variable=="Janthinobacterium",]
+R7J_aov<-aov(value~GrowthCondition,R7J)
+summary(R7J_aov)
+
+R<-SuppFigS1_melt[SuppFigS1_melt$SampleType=="Rhizo",]
+R7<-R[R$Month=="7-week",]
+R7P<-R7[R7$variable=="Pseudomonas",]
+R7P_aov<-aov(value~GrowthCondition,R7P)
+summary(R7P_aov)
+  
+R<-SuppFigS1_melt[SuppFigS1_melt$SampleType=="Rhizo",]
+R7<-R[R$Month=="7-week",]
+R7R<-R7[R7$variable=="Rhodanobacter",]
+R7R_aov<-aov(value~GrowthCondition,R7R)
+summary(R7R_aov)
+
+```
+
+```{r message=FALSE}
+#### Figure1c
+PseudoOTUs<-taxa_names[grep("Pseudomonas",taxa_names$Consensus.lineage),]
+Fig1c<-cbind(measureable_rare_AllSamples_AllSamples_OTU_readcounts[,names(measureable_rare_AllSamples_AllSamples_OTU_readcounts) %in% PseudoOTUs$OTU_ID],get_env(measureable_rare_AllSamples_AllSamples_OTU_readcounts))
+colnames(Fig1c)<-c("OTU 0","OTU 250","OTU 489","OTU 2826","OTU 4386","OTU 9918","Genotype", "Plate", "Month","SampleType","GrowthCondition" ,"AllSamples")
+
+Fig1c_melt<-melt(Fig1c)
+ggplot(Fig1c_melt,aes(x=SampleType,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~Month)+
+  scale_fill_manual(values=rev(c(brewer.pal(11,"PiYG")[c(1)],brewer.pal(11,"RdBu")[c(9)],brewer.pal(11,"PRGn")[c(9)],brewer.pal(9,"OrRd")[c(4)],brewer.pal(11,"RdGy")[c(8,10)])),name="Pseudomonas OTUs")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="./Figures/Fig1c.pdf",height=8,width=6)
+```
+
+
+```{r message=FALSE}
+### Export PseudoSums.txt For use in calculating percentage of reads in each of the six Pseudomonas OTUs.
+PseudoOTUs<-taxa_names[grep("Pseudomonas",taxa_names$Consensus.lineage),]
+Fig1c<-cbind(measureable_rare_AllSamples_AllSamples_OTU_readcounts[,names(measureable_rare_AllSamples_AllSamples_OTU_readcounts) %in% PseudoOTUs$OTU_ID],get_env(measureable_rare_AllSamples_AllSamples_OTU_readcounts))
+test<-sort(colSums(Fig1c[,c(1:6)]))
+write.table(x = test,file = "PseudoSums.txt",sep="\t")
+```
+
+###################
+#### dada2 Analyses
+###################
+
+#### Raw data from 16S rRNA v4 amplicon datasets sequenced on the Illumina platform with 
+#### v3 chemistry were clustered using the dada2 pipeline (Callahan, v1.10.0) as implemented 
+#### in QIIME2 (v2019.4) with default settings, with the following exceptions: 1) error rates 
+#### were obtained by training dada2 on 330000 reads (100 million nucleotides); 2) taxonomic 
+#### classification was performed using a 99% dereplicted GreenGenes database. The resulting 
+#### OTU table was processed with the bash script "cleanup_otu_table.sh" to remove chloroplast 
+#### and mitochondiral contaminants, and OTUs with assignments at only the Kingdom level 
+#### (BacteriaKI), and to reformat incomplete taxonomic assignments for use downstream use in R.
+
+
+```{r}
+#clears current global environment
+rm(list = ls())
+
+# Sets the main working directory containing your OTU table and mapping file.
+root_directory<-"./"
+setwd(root_directory)
+
+# Sources functions used in analysis 
+source("itag_diversity.R")
+
+# Sets the RNG seed for rarifaction commands
+set.seed(42)
+
+#the otu table output from dada2 pipeline and manual manipulation needs to have OTU Ids renumbered and have the RDP score removed (last column), reordered by rowsums, and grep -v to filter hloroplast and itochondria
+get_OTU_tables("dada2_OTU_table.txt",minreadspersample=20000,
+               rarifycount=20000,threshold_sample=2,threshold_readcount=5)
+# Gets the OTU tables used in the remainder of the analyses. 
+# The first argument is the name of the otu table file.
+# minreadspersample   = minimum number of reads that a sample must have to be 
+#                       included in the analysis.
+# rarifycount         = the read depth to which all samples will be randomly sampled
+#                       in the rarefied tables.
+# threshold_sample,   = OTUs without at least threshold_readcount number of reads in
+# threshold_readcount   at least threshold_sample number of samples are excluded in 
+#                       the measureable OTU tables.jgi
+
+get_mapping_file("./dada2_metadata.txt","SampleType:Month:GrowthCondition:Genotype")
+
+env$SampleType<-factor(env$Sample,levels=c("soil","rhizosphere","root"))
+env$Month<-factor(env$Month,levels=c("July","September"))
+
+raw_env<- env
+raw_env<- test_samplenames(OTU_table_full,raw_env)
+rm(env)
+
+subset_OTU_table("OTU_table_measureable_rare")
+make_Rank_readcounts_tables("measureable_rare")
+
+library(plyr)
+
+raw_env$SampleType<-revalue(raw_env$SampleType,c("soil"="Soil","rhizosphere"="Rhizo","root"="Root"))
+raw_env$Month<-revalue(raw_env$Month,c("July"="7-week","September"="15-week"))
+
+#save.image(paste(root_directory,"measureable_rare_dada2.RData",sep=""))
+load("measureable_rare_dada2.RData")
+
+```
+
+```{r message=FALSE}
+###### Figure 1d
+PseudoOTUs<-taxa_names[grep("Pseudomonas",taxa_names$Consensus.lineage),]
+Fig1d<-cbind(measureable_rare_AllSamples_AllSamples_OTU_readcounts[,names(measureable_rare_AllSamples_AllSamples_OTU_readcounts) %in% PseudoOTUs$OTU_ID],get_env(measureable_rare_AllSamples_AllSamples_OTU_readcounts))
+Fig1d<-Fig1d[,c( "0",  "12",  "14",  "15",  "20",  "25",  "32",  "74",  "98",  "380",  "393",    "531",  "556",  "629",  "643",  "650",  "737",  "863",  "889",  "1288",  "1592",    "1782",  "1900",   "2773",  "3326",  "4012",  "493", "1698", "518", "2413" ,  "7900","2329", "Genotype",        "Plate",           "Month",           "SampleType","GrowthCondition" ,"AllSamples"  )]
+
+colnames(Fig1d)<-c("ESV 0", "ESV 12", "ESV 14", "ESV 15", "ESV 20", "ESV 25", "ESV 32", "ESV 74", "ESV 98", "ESV 380", "ESV 393", "ESV 531", "ESV 556", "ESV 629", "ESV 643", "ESV 650", "ESV 737", "ESV 863", "ESV 889", "ESV 1288", "ESV 1592", "ESV 1782", "ESV 1900", "ESV 2773", "ESV 3326", "ESV 4012", "ESV 493", "ESV 1698", "ESV 518", "ESV 2413", "ESV 7900", "ESV 2329","Genotype",        "Plate",           "Month",           "SampleType","GrowthCondition" ,"AllSamples")
+
+Fig1d_melt<-melt(Fig1d)
+ggplot(Fig1d_melt,aes(x=SampleType,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~Month)+
+  scale_fill_manual(values=rev(c(rev(brewer.pal(9,"PuRd")[c(1:9)]),brewer.pal(9,"RdPu")[c(1:9)],brewer.pal(11,"PiYG")[c(1:5)],rev(brewer.pal(11,"PRGn")[c(2:5)]),brewer.pal(11,"RdBu")[c(8,9)],brewer.pal(11,"PRGn")[c(8,9)],brewer.pal(9,"OrRd")[c(4)],brewer.pal(11,"RdGy")[c(10)])),name="Pseudomonas OTUs")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+
+ggsave(last_plot(),filename="Figures/Fig1d.pdf",height=8,width=6)
+
+```
+
+#############################
+#### Full length 16S Analyses
+#############################
+
+#### Raw data from Loop datasets were clustered using the dada2 pipeline (Callahan, v1.10.0) as implemented 
+#### in QIIME2 (v2019.4) with default settings, with the following exceptions: 1) error rates 
+#### were obtained by training dada2 on 330000 reads (100 million nucleotides); 2) taxonomic 
+#### classification was performed using a 99% dereplicted GreenGenes database. The resulting 
+#### OTU table was processed with the bash script "cleanup_otu_table.sh" to remove chloroplast 
+#### and mitochondiral contaminants, and OTUs with assignments at only the Kingdom level 
+#### (BacteriaKI), and to reformat incomplete taxonomic assignments for use downstream use in R.
+
+
+
+```{r}
+#clears current global environment
+rm(list = ls())
+
+# Sets the main working directory containing your OTU table and mapping file.
+root_directory<-"./"
+setwd(root_directory)
+
+# Sources functions used in analysis 
+source("itag_diversity.R")
+
+# Sets the RNG seed for rarifaction commands
+set.seed(42)
+
+#the otu table output from dada2 pipeline and manual manipulation needs to have OTU Ids renumbered and have the RDP score removed (last column), reordered by rowsums, and grep -v to filter hloroplast and itochondria
+get_OTU_tables("Loop_OTU_table.txt",minreadspersample=1500,
+               rarifycount=1500,threshold_sample=0,threshold_readcount=0)
+{# Gets the OTU tables used in the remainder of the analyses. 
+  # The first argument is the name of the otu table file.
+  # minreadspersample   = minimum number of reads that a sample must have to be 
+  #                       included in the analysis.
+  # rarifycount         = the read depth to which all samples will be randomly sampled
+  #                       in the rarefied tables.
+  # threshold_sample,   = OTUs without at least threshold_readcount number of reads in
+  # threshold_readcount   at least threshold_sample number of samples are excluded in 
+  #                       the measureable OTU tables.jgi
+}
+
+get_mapping_file("Loop_metadata.txt","SampleType")
+
+env$SampleType<-factor(env$Sample,levels=c("Soil","Rhizo","Root"))
+
+raw_env<- env
+raw_env<- test_samplenames(OTU_table_full,raw_env)
+rm(env)
+
+subset_OTU_table("OTU_table_measureable_rare")
+
+make_Rank_readcounts_tables("measureable_rare")
+
+library(plyr)
+
+#save.image(paste(root_directory,"measureable_rare_Loop.RData",sep=""))
+load("measureable_rare_Loop.RData")
+```
+
+```{r}
+##### Supplemental Fig2 REQUESTED BUT NOT USEFUL.
+Supp_Fig2<-get_Shannon(measureable_rare_AllSamples_AllSamples_OTU_readcounts)
+Supp_Fig2<-cbind(Supp_Fig2,get_env(Supp_Fig2))
+ggplot(data=Supp_Fig2,aes(x = SampleType,y=ShanEnt,fill=SampleType))+
+  geom_boxplot()+
+  scale_y_continuous(name="Shannon's Diversity",limits = c(4,7.5),)+
+  scale_fill_manual(values=c(brewer.pal(9,"YlOrBr")[c(9,7)]),name="Sample Type")+
+  geom_point(position=position_jitterdodge(dodge.width=0.9))+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename = "./Figures/Supp_Fig2.pdf",width = 4,height = 8)
+
+
+env_current<-get_env(Supp_Fig2)
+Supp_Fig2_anova<-aov(ShanEnt~SampleType,data = Supp_Fig2)
+summary(Supp_Fig2_anova)
+```
+
+```{r message=FALSE}
+###### Fig 2a
+Fig2a<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+Fig2a_top15<-Fig2a[c( "Pseudomonas", "Chitinophaga", "Streptomyces", "Bradyrhizobium","BurkholderiaceaeFA", "Niastella",      "Pedobacter","Haliangium", "Rhizobacter", "CandidatusUdaeobacter", "Janthinobacterium", "Rhodanobacter", "BurkholderiaCaballeroniaParaburkholderia", "RB41", "Gemmatimonas" )]
+colnames(Fig2a_top15)<-c("Pseudomonas", "Chitinophaga", "Streptomyces", "Bradyrhizobium", "Burkholderiaceae Family", "Niastella", "Pedobacter", "Haliangium", "Rhizobacter", "Candidatus Udaeobacter", "Janthinobacterium", "Rhodanobacter", "Paraburkholderia", "Chloracidobacterium", "Gemmatimonas")
+other<-Fig2a[,!(colnames(Fig2a) %in% c("Gemmatimonas", "RB41", "BurkholderiaCaballeroniaParaburkholderia", "Rhodanobacter", "Janthinobacterium", "CandidatusUdaeobacter", "Rhizobacter", "Haliangium", "Pedobacter", "Niastella", "BurkholderiaceaeFA", "Bradyrhizobium", "Streptomyces", "Chitinophaga", "Pseudomonas"))]
+Fig2a_new<-cbind(Fig2a_top15,rowSums(other),get_env(Fig2a))
+names(Fig2a_new)[16]<-"Other"
+
+Fig2a_melt<-melt(Fig2a_new)
+ggplot(Fig2a_melt,aes(x=SampleType,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(stat="identity",position="fill")+
+  #facet_grid(.~Month)+
+  scale_fill_manual(values=rev(c(brewer.pal(11,"PiYG")[c(1)],rev(brewer.pal(11,"BrBG")[c(3,4,7,8,9,10)]),brewer.pal(11,"PuOr")[c(2: 5,7:10)],"grey")),name="Genera")+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16),axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="Figures/Fig2a.pdf",height=8,width=6)
+
+```
+
+```{r message=FALSE}
+###### Fig 2b 
+PseudoOTUs<-taxa_names[grep("Pseudomonas",taxa_names$Consensus.lineage),]
+Fig2b<-measureable_rare_AllSamples_AllSamples_OTU_readcounts[,names(measureable_rare_AllSamples_AllSamples_OTU_readcounts) %in% PseudoOTUs$OTU_ID]
+Fig2b_top<-Fig2b[colSums(Fig2b)>4]
+colnames(Fig2b_top)<-c("FLOTU 3",  "FLOTU 6",  "FLOTU 11", "FLOTU 14", "FLOTU 8",  "FLOTU 21", "FLOTU 18", "FLOTU 24", "FLOTU 31", "FLOTU 16", "FLOTU 19", "FLOTU 30", "FLOTU 28", "FLOTU 13","FLOTU 27", "FLOTU 61", "FLOTU 52", "FLOTU 33", "FLOTU 75", "FLOTU 51", "FLOTU 46", "FLOTU 66", "FLOTU 56", "FLOTU 179","FLOTU 73", "FLOTU 72", "FLOTU 280", "FLOTU 224","FLOTU 223", "FLOTU 105")
+
+Fig2b_top<-Fig2b_top[c(
+                         "FLOTU 3",  "FLOTU 6",  "FLOTU 8","FLOTU 13", "FLOTU 16","FLOTU 24", "FLOTU 27", "FLOTU 179", #ESV0 =8
+                         "FLOTU 14","FLOTU 18","FLOTU 19","FLOTU 33","FLOTU 66", "FLOTU 72","FLOTU 75","FLOTU 105", #ESV12 =8
+                         "FLOTU 11", "FLOTU 28","FLOTU 51", #ESV 14 =3
+                         "FLOTU 31","FLOTU 52", #ESV15 =2
+                         "FLOTU 61", #ESV20 (none for ESV25) =1
+                         "FLOTU 21", "FLOTU 30","FLOTU 73",  #ESV32 =3
+                         "FLOTU 56",  #ESV 74 =1 
+                         "FLOTU 46", "FLOTU 280", "FLOTU 224","FLOTU 223")] #not assigned to ESV =4
+
+Fig2b<-cbind(Fig2b_top,get_env(Fig2b))
+
+Fig2b_melt<-melt(Fig2b)
+write.table(Fig2b_top,file = "abundance for tree.txt",quote = F)
+
+ggplot(Fig2b_melt,aes(x=SampleType,y=value,fill=factor(variable,levels=rev(levels(variable)))))+
+  geom_bar(colour="white",stat="identity",position="fill")+
+  scale_fill_manual(values=rev(c(rep(brewer.pal(9,"PuRd")[c(8)],8),
+                                 rep(brewer.pal(9,"PuRd")[c(7)],8),
+                                 rep(brewer.pal(9,"PuRd")[c(6)],3),
+                                 rep(brewer.pal(9,"PuRd")[c(5)],2),
+                                 rep(brewer.pal(9,"PuRd")[c(4)],1),
+                                 rep(brewer.pal(9,"PuRd")[c(2)],3),
+                                 rep(brewer.pal(9,"PuRd")[c(1)],1),
+                                 brewer.pal(11,"RdGy")[c(7,8,9,10)])),name="Pseudomonas Full Length OTUs")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=16,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+
+ggsave(last_plot(),filename="Figures/Fig2b_new2.pdf",height=8,width=6)
+
+```
+
+
+######################
+########### PyParanoid
+######################
+
+#### Analayis of shotgun metagenomic datasets using Pyparanoid. Orthologs were predicted using PyParanoid v 0.4 (Melnyk et al., 2019). A dataset containing 140 high quality Pseudomonas isolate genomes from the IMG database (Study ID: Gs0114533) was used to build the reference pangenome. In #brief, DIAMOND (Buchfink et al., 2015) and InParanoid (Sonnhammer and Östlund, 2015) were used to generate pairwise similarity scores and identify pairwise orthology relationships. Gene families were then identified using Markov clustering (mcl) and aligned using MUSCLE (Edgar, 2004). Alignments were used to build hidden Markov models (HMMs) using HMMER3 (Eddy, 2011) and these HMMs were used to propagate ortholog annotations of our metagenomes. A presence/absence map of a subset of putatively pathogenic and commensal gene islands identified in (Melnyk et al., 2019) was generated using the NMF package in R v 4.0.2 (Gaujoux and Seoighe, 2010).
+
+```{r}
+### Figure 3 PyParanoid Figures
+
+#clears current global environment
+rm(list = ls())
+
+# Sets the main working directory containing your OTU table and mapping file.
+root_directory<-"./"
+setwd(root_directory)
+
+# Sources functions used in analysis 
+source("itag_diversity.R")
+library(plyr)
+
+# Sets the RNG seed for rarifaction commands
+set.seed(42)
+
+
+setwd("~/Desktop/JGI_Postdoc/Chiniquy_Paper")
+library(vegan)
+library(tidyverse)
+library(ggrepel)
+library(ape)
+
+# use jaccard dist (p/a matrix)
+
+matrix <- read.csv("homologs.csv")
+matrix2 = setNames(data.frame(t(matrix[,-1])), matrix[,1])
+matrix2[matrix2>0] <-1
+
+mds <- metaMDS(matrix2, distance = "jaccard", k=2, trymax =1000)
+plot(mds)
+mds_sco <- scores(mds, display="sites")
+mds_tbl <- as_tibble(mds_sco)
+
+mds_tbl <- mutate(mds_tbl, vgntxt = rownames(mds_sco))
+plt <- ggplot(mds_tbl, aes(x = NMDS1, y = NMDS2, label = vgntxt)) +
+  geom_text(size = 2.5)
+plt
+
+
+## HEATMAP
+library(NMF)
+
+data <- read.csv("homologs5.csv", row.names = 1)
+
+data[data>0] <- 1
+
+data <- as.matrix(data)
+
+aheatmap(data, Rowv = NA, Colv = NA, color = 1, border_color = "grey")
+
+data2 <- read.csv("homologs_mg2.csv", row.names = 1)
+
+data2 <- as.matrix(data2)
+
+aheatmap(data2, Rowv = NA, Colv = NA)
+```
+
+
+
+
+######################
+########### Enrichment
+######################
+
+#### Raw data from 16S rRNA v4 amplicon datasets for the Enrichment Experiments sequenced on the Illumina platform with 
+#### v3 chemistry were clustered using the dada2 pipeline (Callahan, v1.10.0) as implemented 
+#### in QIIME2 (v2019.4) with default settings, with the following exceptions: 1) error rates 
+#### were obtained by training dada2 on 330000 reads (100 million nucleotides); 2) taxonomic 
+#### classification was performed using a 99% dereplicted GreenGenes database. The resulting 
+#### OTU table was processed with the bash script "cleanup_otu_table.sh" to remove chloroplast 
+#### and mitochondiral contaminants, and OTUs with assignments at only the Kingdom level 
+#### (BacteriaKI), and to reformat incomplete taxonomic assignments for use downstream use in R.
+
+```{r}
+#clears current global environment
+rm(list = ls())
+
+# Sets the main working directory containing your OTU table and mapping file.
+root_directory<-"./"
+setwd(root_directory)
+
+# Sources functions used in analysis 
+source("itag_diversity.R")
+
+# Sets the RNG seed for rarifaction commands
+set.seed(42)
+
+get_OTU_tables("enrichment_OTU_table.txt",minreadspersample=10000,
+               rarifycount=10000,threshold_sample=1,threshold_readcount=2)
+# Gets the OTU tables used in the remainder of the analyses. 
+# The first argument is the name of the otu table file.
+# minreadspersample   = minimum number of reads that a sample must have to be 
+#                       included in the analysis.
+# rarifycount         = the read depth to which all samples will be randomly sampled
+#                       in the rarefied tables.
+# threshold_sample,   = OTUs without at least threshold_readcount number of reads in
+# threshold_readcount   at least threshold_sample number of samples are excluded in 
+#                       the measureable OTU tables.jgi
+
+get_mapping_file("./enrichment_metadata.txt","compound:dilution:transfer")
+
+farrowAndBall_palette <- c(
+  "#4d5b6a" #Stiffkey Blue
+  ,"#6a90b4" #Cook's Blue
+  ,"#599ec4" #ST Giles Blue
+  ,"#a1c5c8" #Blue Ground
+  ,"#7997a1" #Stone Blue
+  ,"#427e83" #Vardo
+  ,"#84b59c" #Arsenic
+  ,"#919f70" #Yeabridge Green
+  ,"#686a47" #Bancha
+  ,"#c8bd83" #Churlish Green
+  ,"#cb9e59" #India Yellow
+  ,"#ecc363" #Babouche
+  ,"#c57b67" #Red Earth
+  ,"#d65f3d" #Charlotte's Locks
+  ,"#a04344" #Incarnadine
+  ,"#bf7a8f" #Rangwali
+  ,"#8d8089" #Brassica
+  ,"#50414c" #Pelt
+  ,"#e5e0db" #Strong White
+  ,"#444546" #Off-Black
+)
+
+raw_env<- env
+raw_env<- test_samplenames(OTU_table_full,raw_env)
+rm(env)
+
+raw_env$compound<-factor(raw_env$compound, levels=c("none","glucose","shikimic acid","abscisic acid" ,"salicylic acid","L-glutamic acid" ,"xylohexaose","cellohexaose"))                  
+
+subset_OTU_table("OTU_table_measureable_rare") 
+make_Rank_readcounts_tables("measureable_rare")
+
+#save.image(paste(root_directory,"measureable_rare_enrichment.RData",sep=""))
+load("measureable_rare_enrichment.RData")
+```
+
+```{r}
+#### Figure 4a PCoA
+
+distance_current<-vegdist(measureable_rare_AllSamples_AllSamples_OTU_readcounts,"bray")
+env_current<-get_env(distance_current)
+distance_current.pcoa <- pcoa(distance_current, correction = "none", rn = NULL)
+axes_to_plot<-c(1,2)
+percent_var_axes1 <- round(distance_current.pcoa$values[c(axes_to_plot[1]),2]*100,4)
+percent_var_axes2 <- round(distance_current.pcoa$values[c(axes_to_plot[2]),2]*100,4)
+allsampleordination<-as.data.frame(distance_current.pcoa$vectors[,c(1,2)])
+allsampleordination<-cbind(allsampleordination,env_current)
+
+allsampleordination_noSoil<-allsampleordination[allsampleordination$SampleType %in% c("R","Z"),]
+allsampleordination_noSoil$SampleType<-factor(allsampleordination_noSoil$SampleType,levels=c("Rhizo","Root"))
+
+ggplot(data=allsampleordination,aes(x=Axis.1,y=Axis.2,group=compound))+
+  geom_point(aes(colour=compound,shape=transfer,size =1)) + 
+  scale_color_manual(values=c("black",farrowAndBall_palette[c(1,3,5,7,9,11,13)]))+
+  theme(axis.text.x=element_text(size=20,color="black",angle=90), axis.text.y=element_text(size=20,color="black"), axis.title=element_text(size=20,face="bold"),text=element_text(size=16)) 
+
+ggsave(last_plot(),filename = "Figures/Fig4a.pdf",width=7,height=5)
+
+```
+
+```{r}
+### Figure 4b
+Fig4b<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+Fig4b<-Fig4b[,(order(colSums(-Fig4b)))]
+Fig4b<-cbind(rowSums(Fig4b[,c(19:ncol(Fig4b))]),Fig4b[,rev(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18))],get_env(Fig4b))
+names(Fig4b)[1]<-"Other"
+Fig4b<-Fig4b[c("Other", "Sphingobium","Trabulsiella","Arthrobacter","Bacillus","Agrobacterium", "AlphaproteobacteriaCL", "Duganella","Cupriavidus", "NeisseriaceaeFA", "OxalobacteraceaeFA", "Dyella", "Ralstonia","Massilia","Mesorhizobium",     "Paenibacillus", "Burkholderia","Bradyrhizobium","Pseudomonas", "compound", "dilution", "rep", "transfer", "plate", "well", "AllSamples")]
+
+Fig4b_melt<-melt(Fig4b)
+ggplot(Fig4b_melt,aes(x=transfer,y=value,fill=variable))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~compound,scales="free_x")+
+  scale_fill_manual(values=rev(c(brewer.pal(11,"PiYG")[c(1,7,8)],rev(brewer.pal(9,"YlOrRd")[c(2:6)]),(brewer.pal(9,"YlGnBu")[c(1:8)]),(brewer.pal(9,"Purples")[c(7,6)]),"grey")),name="Genera")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=10,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="Figures/Fig4b.pdf",height=6,width=14)
+```
+
+```{r}
+#### Supplemental Table Indicator Analysis
+
+metacurrent <- data.frame(sample_data(current))
+groupingfactor<-"compound"
+Rank_readcounts_current<-measureable_rare_AllSamples_AllSamples_genus_readcounts
+Rank_readcounts_current<- Rank_readcounts_current[,colSums(Rank_readcounts_current)>0]
+env<-metacurrent[,c(1,15)]
+raw_env<-env
+env_current<- get_env(Rank_readcounts_current)
+source("/Users/colemanderr/Desktop/R_work/itag_diversity.R")
+Rank_readcounts_current_matrix <- as.matrix(Rank_readcounts_current)
+storage.mode(Rank_readcounts_current_matrix) <- "integer"
+IndSpec_current <- indval(Rank_readcounts_current_matrix,env_current[,names(env_current)==groupingfactor],numitr=(dim(Rank_readcounts_current_matrix)[2]/0.05)*10)
+IndicatorSpecies_stats <- {}
+IndicatorSpecies_stats<-cbind(IndicatorSpecies_stats,c(IndSpec_current$pval))
+IndicatorSpecies_stats<-cbind(IndicatorSpecies_stats,c(IndSpec_current$maxcls))
+IndicatorSpecies_stats<-cbind(IndicatorSpecies_stats,c(IndSpec_current$indcls))
+IndicatorSpecies_stats <-as.data.frame(IndicatorSpecies_stats)
+# Adds pvalue,maxclass, and indclass
+rownames(IndicatorSpecies_stats) <- gsub("^X(\\d*)","\\1",rownames(IndicatorSpecies_stats),perl=T)
+# Adds consensus lineage
+colnames(IndicatorSpecies_stats)<-c("Pvalue","MaxClass",
+                                    "IndicatorValueforMaxClass")
+IndicatorSpecies_stats<-IndicatorSpecies_stats[IndicatorSpecies_stats$MaxClass>0,]
+IndicatorSpecies_stats$MaxClass<-as.factor(IndicatorSpecies_stats$MaxClass)
+for (level in 1:length(levels(env_current[,colnames(env_current)==groupingfactor]))){
+  levels(IndicatorSpecies_stats$MaxClass)[level]<-levels(env_current[,colnames(env_current)==groupingfactor])[level]
+}
+# Converts Maxclass entries to env_current names.
+RelAbund<-as.data.frame(IndSpec_current$relabu,check.names=F)
+rownames(RelAbund) <- gsub("^X(\\d*)","\\1",rownames(RelAbund),perl=T)
+#convert rownames to remove the X.
+RelAbund<- RelAbund[rownames(RelAbund)%in%rownames(IndicatorSpecies_stats),]
+colnames(RelAbund)<-sub("","\\1RelAbu_",colnames(RelAbund))
+#shorten RelAbund to include only rownames in IndicaterSpeciesStats.
+IndicatorSpecies_stats<-cbind(IndicatorSpecies_stats,RelAbund[,1:(dim(RelAbund)[2])])
+# Adds relative abundance.
+RelFrq<-as.data.frame(IndSpec_current$relfrq,check.names=F)
+rownames(RelFrq) <- gsub("^X(\\d*)","\\1",rownames(RelFrq),perl=T)
+#convert rownames to remove the X.
+RelFrq<- RelFrq[rownames(RelFrq)%in%rownames(IndicatorSpecies_stats),]
+colnames(RelFrq)<-sub("","\\1RelFrq_",colnames(RelFrq))
+#shorten RelAbund to include only rownames in IndicaterSpeciesStats.
+IndicatorSpecies_stats<-cbind(IndicatorSpecies_stats,RelFrq[,1:(dim(RelFrq)[2])])
+attach(IndicatorSpecies_stats)
+IndicatorSpecies_stats<-IndicatorSpecies_stats[order(MaxClass,Pvalue,
+                                                     -IndicatorValueforMaxClass),]
+#gets the order in increasing pvalue, and decreasing Indicator value.
+detach(IndicatorSpecies_stats)
+# Orders the entries in table by Maxclass, p-value, lineage, then indicator value.
+write.table (IndicatorSpecies_stats, file="Supplemental Table Indicator Genera.txt",col.names = NA,sep="\t")
+```
+
+```{r}
+### Figure 4c
+Fig4c<-measureable_rare_AllSamples_AllSamples_OTU_readcounts
+Fig4c<-Fig4c[,(order(colSums(-Fig4c)))]
+Fig4c<-cbind(rowSums(Fig4c[,c(18:ncol(Fig4c))]),Fig4c[,rev(c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17))],get_env(Fig4c))
+names(Fig4c)[1]<-"Other"
+Fig4c<-Fig4c[c("Other","13", "10", "4", "16", "5", "6", "15", "3", "11", "17", "1", "2", "7", "8", "9", "12", "14","compound", "dilution", "rep", "transfer", "plate", "well", "AllSamples")]
+colnames(Fig4c)<-c("Other","OTU 13 Sphingobium", "OTU 10 Trabulsiella", "OTU 4 Arthrobacter", "OTU 16 Bacillus", "OTU 5 Cupravidus", "OTU 6 NeisseriaceaeFA", "OTU 15 OxalobacteraceaeFA", "OTU 3 Paenibacillus", "OTU 11 Paenibacillus", "OTU 17 Paenibacillus", "OTU 1 Burkholderia", "OTU 2 Burkholderia", "OTU 7 Burkholderia", "OTU 8 Pseudomonas", "OTU 9 Pseudomonas", "OTU 12 Pseudomonas", "OTU 14 Pseudomonas","compound", "dilution", "rep", "transfer", "plate", "well", "AllSamples")
+
+Pseudomonas<-colorRampPalette(brewer.pal(11, "PiYG")[c(1,4)])
+Burkholderia<-colorRampPalette(brewer.pal(9,"Greens")[c(3,5)])
+Paenibacillus<-colorRampPalette(brewer.pal(9,"YlOrRd")[c(6,5)])
+
+Fig4c_melt<-melt(Fig4c)
+ggplot(Fig4c_melt,aes(x=transfer,y=value,fill=variable))+
+  geom_bar(stat="identity",position="fill")+
+  facet_grid(.~compound,scales="free_x")+
+  scale_fill_manual(values=rev(c(Pseudomonas(4),Burkholderia(3),Paenibacillus(3),brewer.pal(9,"YlGnBu")[c(1:3,7,8)],(brewer.pal(9,"Purples")[c(7,6)]),"grey")),name="Genera")+
+  scale_y_continuous(name="Relative Abundance")+
+  scale_x_discrete(name="Sample Type")+
+  theme(axis.text.x=element_text(hjust=1,vjust=0.5,size=10,color="black",angle=90), axis.text.y=element_text(size=16), axis.title=element_text(size=16,face="bold"),text=element_text(size=16))
+ggsave(last_plot(),filename="Figures/Fig4c.pdf",height=6,width=15)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

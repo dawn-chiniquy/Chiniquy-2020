@@ -1,0 +1,144 @@
+SampleID	compound	dilution	rep	transfer	plate	well
+S1p7	L-glutamic acid	1x	1	0	1	A1
+S2p7	glucose	1x	1	0	1	A2
+S3p7	cellohexaose	1x	1	0	1	A3
+S4p7	xylohexaose	1x	1	0	1	A4
+S5p7	shikimic acid	1x	1	0	1	A5
+S6p7	salicylic acid	1x	1	0	1	A6
+S7p7	abscisic acid	1x	1	0	1	A7
+S8p7	L-glutamic acid	10x	1	0	1	A8
+S9p7	glucose	10x	1	0	1	A9
+S10p7	cellohexaose	10x	1	0	1	A10
+S11p7	xylohexaose	10x	1	0	1	A11
+S12p7	shikimic acid	10x	1	0	1	A12
+S13p7	salicylic acid	10x	1	0	1	B1
+S14p7	abscisic acid	10x	1	0	1	B2
+S15p7	L-glutamic acid	1x	2	0	1	B3
+S16p7	glucose	1x	2	0	1	B4
+S17p7	cellohexaose	1x	2	0	1	B5
+S18p7	xylohexaose	1x	2	0	1	B6
+S19p7	shikimic acid	1x	2	0	1	B7
+S20p7	salicylic acid	1x	2	0	1	B8
+S21p7	abscisic acid	1x	2	0	1	B9
+S22p7	L-glutamic acid	10x	2	0	1	B10
+S23p7	glucose	10x	2	0	1	B11
+S24p7	cellohexaose	10x	2	0	1	B12
+S25p7	xylohexaose	10x	2	0	1	C1
+S26p7	shikimic acid	10x	2	0	1	C2
+S27p7	salicylic acid	10x	2	0	1	C3
+S28p7	abscisic acid	10x	2	0	1	C4
+S29p7	L-glutamic acid	1x	3	0	1	C5
+S30p7	glucose	1x	3	0	1	C6
+S31p7	cellohexaose	1x	3	0	1	C7
+S32p7	xylohexaose	1x	3	0	1	C8
+S33p7	shikimic acid	1x	3	0	1	C9
+S34p7	salicylic acid	1x	3	0	1	C10
+S35p7	abscisic acid	1x	3	0	1	C11
+S36p7	L-glutamic acid	10x	3	0	1	C12
+S37p7	glucose	10x	3	0	1	D1
+S38p7	cellohexaose	10x	3	0	1	D2
+S39p7	xylohexaose	10x	3	0	1	D3
+S40p7	shikimic acid	10x	3	0	1	D4
+S41p7	salicylic acid	10x	3	0	1	D5
+S42p7	abscisic acid	10x	3	0	1	D6
+S43p7	L-glutamic acid	100x	1	0	1	D7
+S44p7	L-glutamic acid	100x	1	0	1	D8
+S45p7	L-glutamic acid	100x	1	0	1	D9
+S46p7	L-glutamic acid	1000x	2	0	1	D10
+S47p7	L-glutamic acid	1000x	2	0	1	D11
+S48p7	L-glutamic acid	1000x	2	0	1	D12
+S49p7	L-glutamic acid	10000x	3	0	1	E1
+S50p7	L-glutamic acid	10000x	3	0	1	E2
+S51p7	L-glutamic acid	10000x	3	0	1	E3
+S52p7	L-glutamic acid	100000x	4	0	1	E4
+S53p7	L-glutamic acid	100000x	4	0	1	E5
+S54p7	none	1x	1	0	1	E6
+S55p7	none	1x	2	0	1	E7
+S56p7	none	1x	3	0	1	E8
+S57p7	none	10x	1	0	1	E9
+S58p7	none	10x	2	0	1	E10
+S59p7	none	10x	3	0	1	E11
+S60p7	L-glutamic acid	1x	1	1	1	E12
+S61p7	glucose	1x	1	1	1	F1
+S62p7	cellohexaose	1x	1	1	1	F2
+S63p7	xylohexaose	1x	1	1	1	F3
+S64p7	shikimic acid	1x	1	1	1	F4
+S65p7	salicylic acid	1x	1	1	1	F5
+S66p7	abscisic acid	1x	1	1	1	F6
+S67p7	L-glutamic acid	10x	1	1	1	F7
+S68p7	glucose	10x	1	1	1	F8
+S69p7	cellohexaose	10x	1	1	1	F9
+S70p7	xylohexaose	10x	1	1	1	F10
+S71p7	shikimic acid	10x	1	1	1	F11
+S72p7	salicylic acid	10x	1	1	1	F12
+S73p7	abscisic acid	10x	1	1	1	G1
+S74p7	L-glutamic acid	1x	2	1	1	G2
+S75p7	glucose	1x	2	1	1	G3
+S76p7	cellohexaose	1x	2	1	1	G4
+S77p7	xylohexaose	1x	2	1	1	G5
+S78p7	shikimic acid	1x	2	1	1	G6
+S79p7	salicylic acid	1x	2	1	1	G7
+S80p7	abscisic acid	1x	2	1	1	G8
+S81p7	L-glutamic acid	10x	2	1	1	G9
+S82p7	glucose	10x	2	1	1	G10
+S83p7	cellohexaose	10x	2	1	1	G11
+S84p7	xylohexaose	10x	2	1	1	G12
+S85p7	shikimic acid	10x	2	1	1	H1
+S86p7	salicylic acid	10x	2	1	1	H2
+S87p7	abscisic acid	10x	2	1	1	H3
+S88p7	L-glutamic acid	1x	3	1	1	H4
+S89p7	glucose	1x	3	1	1	H5
+S90p7	cellohexaose	1x	3	1	1	H6
+S91p7	xylohexaose	1x	3	1	1	H7
+S92p7	shikimic acid	1x	3	1	1	H8
+S93p7	salicylic acid	1x	3	1	1	H9
+S94p7	abscisic acid	1x	3	1	1	H10
+S95p7	L-glutamic acid	10x	3	1	1	H11
+S96p7	glucose	10x	3	1	1	H12
+S1p8	cellohexaose	10x	3	1	2	A1
+S2p8	xylohexaose	10x	3	1	2	A2
+S3p8	shikimic acid	10x	3	1	2	A3
+S4p8	salicylic acid	10x	3	1	2	A4
+S5p8	abscisic acid	10x	3	1	2	A5
+S6p8	L-glutamic acid	100x	1	1	2	A6
+S7p8	L-glutamic acid	100x	1	1	2	A7
+S8p8	L-glutamic acid	100x	1	1	2	A8
+S9p8	L-glutamic acid	1000x	2	1	2	A9
+S10p8	L-glutamic acid	1000x	2	1	2	A10
+S11p8	none	1x	1	1	2	A11
+S12p8	none	1x	2	1	2	A12
+S13p8	none	1x	3	1	2	B1
+S14p8	none	10x	1	1	2	B2
+S15p8	none	10x	2	1	2	B3
+S16p8	none	10x	3	1	2	B4
+S17p8	L-glutamic acid	1x	1	2	2	B5
+S18p8	glucose	1x	1	2	2	B6
+S19p8	shikimic acid	1x	1	2	2	B7
+S20p8	salicylic acid	1x	1	2	2	B8
+S21p8	L-glutamic acid	10x	1	2	2	B9
+S22p8	glucose	10x	1	2	2	B10
+S23p8	shikimic acid	10x	1	2	2	B11
+S24p8	salicylic acid	10x	1	2	2	B12
+S25p8	L-glutamic acid	1x	2	2	2	C1
+S26p8	glucose	1x	2	2	2	C2
+S27p8	shikimic acid	1x	2	2	2	C3
+S28p8	salicylic acid	1x	2	2	2	C4
+S29p8	L-glutamic acid	10x	2	2	2	C5
+S30p8	glucose	10x	2	2	2	C6
+S31p8	shikimic acid	10x	2	2	2	C7
+S32p8	salicylic acid	10x	2	2	2	C8
+S33p8	L-glutamic acid	1x	3	2	2	C9
+S34p8	glucose	1x	3	2	2	C10
+S35p8	shikimic acid	1x	3	2	2	C11
+S36p8	salicylic acid	1x	3	2	2	C12
+S37p8	L-glutamic acid	10x	3	2	2	D1
+S38p8	glucose	10x	3	2	2	D2
+S39p8	shikimic acid	10x	3	2	2	D3
+S40p8	salicylic acid	10x	3	2	2	D4
+S41p8	L-glutamic acid	100x	1	2	2	D5
+S42p8	L-glutamic acid	100x	1	2	2	D6
+S43p8	L-glutamic acid	100x	1	2	2	D7
+S44p8	L-glutamic acid	1000x	2	2	2	D8
+S45p8	L-glutamic acid	1000x	2	2	2	D9
+S46p8	L-glutamic acid	1000x	2	2	2	D10
+S47p8	L-glutamic acid	1000x	2	2	2	D11
